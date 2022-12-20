@@ -1,28 +1,63 @@
 import cv2, json
 import mediapipe as mp
-import math, sys, threading
+import math, sys, threading, mysql.connector, os
+from datetime import datetime
 from PyQt5 import QtWidgets, QtCore, QtMultimedia
 from PyQt5.QtGui import QImage, QPixmap, QFont
 
-class Windows(QtWidgets.QWidget):
+class Windows(QtWidgets.QWidget):   # 繼承父類別 方法、屬性 (由super().__init()__負責) ， 並可以額外自定義屬於自己的屬性、方法 → 傳承!
     def __init__(self):
-        super().__init__()
+        super().__init__()         # 繼承父類別屬性
         self.setWindowTitle("lets_dance")
         self.app_w, self.app_h = 1920, 1080
         self.resize(self.app_w, self.app_h)
-        self.path = './mp3/bonbon.mp3'  # 音乐文件路径
+        self.path = './mp3/bonbon.mp3'           # 音乐文件路径
         self.url = QtCore.QUrl.fromLocalFile(self.path)
         self.ocv = True
-        self.mp_drawing = mp.solutions.drawing_utils  # mediapipe 繪圖方法
-        self.mp_drawing_styles = mp.solutions.drawing_styles  # mediapipe 繪圖樣式
-        self.mp_pose = mp.solutions.pose  # mediapipe 姿勢偵測
+        self.mp_drawing = mp.solutions.drawing_utils     # mediapipe 繪圖方法
+        self.mp_drawing_styles = mp.solutions.drawing_styles     # mediapipe 繪圖樣式
+        self.mp_pose = mp.solutions.pose     # mediapipe 姿勢偵測
         self.ui()
-        # self.setLabel()
         self.run()
-        # self.opencv()
-        self.closeEvent = self.closeOpencv
+        self.closeEvent = self.closeOpencv        # 試窗關閉事件觸發後，關閉opencv
+        QtCore.QTimer.singleShot(30000, self.close)
+        # self.savethescore()
+        # self.closeEvent = self.savethescore
 
-    def angle(self, v1, v2):
+    def ui(self):
+        # 定義背景UI、建立label函式
+        self.view = QtWidgets.QGraphicsView(self)
+        self.view.setGeometry(0, 0, self.app_w, self.app_h)
+        scene = QtWidgets.QGraphicsScene()
+        image = QPixmap("./UI/ui_5.jpg")
+        image = image.scaled(self.app_w, self.app_h)
+        scene.setSceneRect(0, 0, 1920, 1055)
+        scene.addPixmap(image)
+        self.view.setScene(scene)
+
+        self.label = QtWidgets.QLabel(self)
+        self.label.setGeometry(0, 110, 950, 970)
+
+        self.label2 = QtWidgets.QLabel(self)
+        self.label2.setGeometry(969, 110, 830, 970)
+
+        self.label3 = QtWidgets.QLabel(self)
+        self.label3.setGeometry(1800, 800, 120, 200)
+
+        self.label4 = QtWidgets.QLabel(self)
+        self.label4.setGeometry(1600, 10, 320, 80)
+        # self.label4.setContentsMargins(0, 0, 0, 0)       # 設定邊界
+        self.label4.setAlignment(QtCore.Qt.AlignRight)  # 對齊方式(向右)
+        self.label4.setStyleSheet('''color:red''')
+        self.label4.setFont(QFont("Verdana", 40))
+
+        self.label5 = QtWidgets.QLabel(self)
+        self.label5.setGeometry(150, 10, 700, 80)
+        self.label5.setStyleSheet("color:white")
+        self.label5.setFont(QFont("Verdana", 40))
+        self.label5.setText("Chiki-chiki Ban-ban")
+
+    def angle(self, v1, v2):       # 計算角度函式
         dx1 = v1[2] - v1[0]
         dy1 = v1[3] - v1[1]
         dx2 = v2[2] - v2[0]
@@ -40,47 +75,10 @@ class Windows(QtWidgets.QWidget):
         return included_angle
 
     def closeOpencv(self, event):
-        # global ocv
         self.ocv = False
 
-    def ui(self):
-        view = QtWidgets.QGraphicsView(self)
-        view.setGeometry(0, 0, self.app_w, self.app_h)
-        scene = QtWidgets.QGraphicsScene()
-        img = QPixmap("./UI/ui_5.jpg")
-        img = img.scaled(self.app_w, self.app_h)
-        scene.setSceneRect(0, 0, 1920, 1055)
-        scene.addPixmap(img)
-        view.setScene(scene)
-
-    # def setLabel(self):
-
     def opencv(self):
-        # global ocv
-        self.label = QtWidgets.QLabel(self)
-        self.label.setGeometry(0, 110, 950, 970)
-
-        self.label2 = QtWidgets.QLabel(self)
-        self.label2.setGeometry(969, 110, 830, 970)
-
-        self.label3 = QtWidgets.QLabel(self)
-        self.label3.setGeometry(1800, 800, 120, 200)
-
-        self.label4 = QtWidgets.QLabel(self)
-        self.label4.setGeometry(1600, 10, 320, 80)
-        # self.label4.setContentsMargins(0, 0, 0, 0)          # 設定邊界
-        self.label4.setAlignment(QtCore.Qt.AlignRight)  # 對齊方式
-        self.label4.setStyleSheet('''color:red''')
-
-        self.label5 = QtWidgets.QLabel(self)
-        self.label5.setGeometry(150, 10, 700, 80)
-        self.label5.setStyleSheet("color:white")
-
-        self.font = QFont()  # 加入文字設定
-        self.font.setFamily('Verdana')  # 設定字體
-        self.font.setPointSize(40)  # 文字大小
-
-        cap = cv2.VideoCapture('./mp4/bonbon_cut.mp4')  # 開啟影片檔案
+        cap = cv2.VideoCapture('./mp4/bonbon_cut.mp4')    # 開啟影片檔案
         cap2 = cv2.VideoCapture(0)
         # 啟用姿勢偵測
         pose = self.mp_pose.Pose(
@@ -90,12 +88,12 @@ class Windows(QtWidgets.QWidget):
         if not cap.isOpened() and cap2.isOpened():
             exit()
         else:
-            content = QtMultimedia.QMediaContent(self.url)  # 载入音樂
-            player = QtMultimedia.QMediaPlayer()  # 建立 QMediaPlayer元件
-            player.setMedia(content)  # 相連 QMediaPlayer元件與音樂路徑
+            content = QtMultimedia.QMediaContent(self.url)    # 载入音樂
+            player = QtMultimedia.QMediaPlayer()      # 建立 QMediaPlayer元件
+            player.setMedia(content)      # 相連 QMediaPlayer元件與音樂路徑
             player.play()
 
-        c = 1
+        pointer = 1            # 設定一個指針來計算偵數
         i = 0
         count = 60
         score = 0
@@ -103,29 +101,30 @@ class Windows(QtWidgets.QWidget):
             ret, video = cap.read()
             ret2, camera = cap2.read()
             # video = video[0:720, 350:950]
-            camera = camera[0:480, 150:550]
+            camera = camera[0:480, 150:550]        # 裁切影像畫面
             camera = cv2.flip(camera, 1)
             video = cv2.resize(video, (830, 970))
             camera = cv2.resize(camera, (950, 970))
             video = cv2.cvtColor(video, cv2.COLOR_BGR2RGB)
             camera = cv2.cvtColor(camera, cv2.COLOR_BGR2RGB)
-            img2 = cv2.imread(f"./image/bonbon/{(c // 60) + 1}.jpg")
+            # 讀取 提示照片 = 關鍵幀照片
+            img2 = cv2.imread(f"./image/bonbon/{(pointer // 60) + 1}.jpg")
             img2 = cv2.resize(img2, (120, 200))
             img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
             if not ret and ret2:
                 break
-            if c > 240:
+            if pointer > 240:            # 當真數來到240時，開始計算
                 i += 1
                 if i % count == 0:
-                    cv2.imwrite(f"./camera_photo/camera{c}.jpg", camera)
+                    cv2.imwrite(f"./camera_photo/camera{pointer}.jpg", camera)
                     i = 0
-                    img = cv2.imread(f"./camera_photo/camera{c}.jpg")
+                    img = cv2.imread(f"./camera_photo/camera{pointer}.jpg")
                     size = img.shape  # 取得照片影像尺寸
                     w = size[1]  # 取得畫面寬度
                     h = size[0]  # 取得畫面高度
                     results = pose.process(img)  # 取得姿勢偵測結果
                     if results.pose_landmarks:
-                        x1 = results.pose_landmarks.landmark[11].x * w  # 取得手部末端 x 座標
+                        x1 = results.pose_landmarks.landmark[11].x * w      # 取得特定點位之 x 座標
                         x2 = results.pose_landmarks.landmark[12].x * w
                         x3 = results.pose_landmarks.landmark[13].x * w
                         x4 = results.pose_landmarks.landmark[14].x * w
@@ -137,7 +136,7 @@ class Windows(QtWidgets.QWidget):
                         x10 = results.pose_landmarks.landmark[26].x * w
                         x11 = results.pose_landmarks.landmark[27].x * w
                         x12 = results.pose_landmarks.landmark[28].x * w
-                        y1 = results.pose_landmarks.landmark[11].y * h  # 取得手部末端 y 座標
+                        y1 = results.pose_landmarks.landmark[11].y * h      # 取得特定點位之 y 座標
                         y2 = results.pose_landmarks.landmark[12].y * h
                         y3 = results.pose_landmarks.landmark[13].y * h
                         y4 = results.pose_landmarks.landmark[14].y * h
@@ -150,7 +149,7 @@ class Windows(QtWidgets.QWidget):
                         y11 = results.pose_landmarks.landmark[27].y * h
                         y12 = results.pose_landmarks.landmark[28].y * h
 
-                        B_C = [x4, y4, x6, y6]
+                        B_C = [x4, y4, x6, y6]          # 指定做座標向量變數
                         B_A = [x4, y4, x2, y2]
                         A_B = [x2, y2, x4, y4]
                         A_G = [x2, y2, x8, y8]
@@ -167,14 +166,14 @@ class Windows(QtWidgets.QWidget):
                         J_H = [x9, y9, x7, y7]
                         J_L = [x9, y9, x11, y11]
 
-                        ang_1 = Windows.angle(self, B_C, B_A)
-                        ang_2 = Windows.angle(self, A_B, A_G)
-                        ang_3 = Windows.angle(self, G_A, G_I)
-                        ang_4 = Windows.angle(self, I_G, I_K)
-                        ang_5 = Windows.angle(self, E_F, E_D)
-                        ang_6 = Windows.angle(self, D_E, D_H)
-                        ang_7 = Windows.angle(self, H_D, H_J)
-                        ang_8 = Windows.angle(self, J_H, J_L)
+                        ang_1 = self.angle(B_C, B_A)
+                        ang_2 = self.angle(A_B, A_G)
+                        ang_3 = self.angle(G_A, G_I)
+                        ang_4 = self.angle(I_G, I_K)
+                        ang_5 = self.angle(E_F, E_D)
+                        ang_6 = self.angle(D_E, D_H)
+                        ang_7 = self.angle(H_D, H_J)
+                        ang_8 = self.angle(J_H, J_L)
                         ang_avg = (ang_1 + ang_2 + ang_3 + ang_4 + ang_5 + ang_6 + ang_7 + ang_8) / 8
 
                         # 根據姿勢偵測結果，標記身體節點和骨架
@@ -184,7 +183,7 @@ class Windows(QtWidgets.QWidget):
                             self.mp_pose.POSE_CONNECTIONS,
                             landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
 
-                        with open(f"./jsonfile/bonbon/sample{c // 60}.json") as f:
+                        with open(f"./jsonfile/bonbon/sample{pointer // 60}.json") as f:
                             p = json.load(f)
 
                         x = int(abs(ang_avg - p["angavg"]))
@@ -197,12 +196,8 @@ class Windows(QtWidgets.QWidget):
                         else:
                             score += 0
 
-            # cv2.putText(camera, str(score), (15, 50), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 2, (0, 0, 255), 4)
             self.label4.setText(str(score))
-            self.label4.setFont(self.font)
-            self.label5.setText("Chiki-chiki Ban-ban")
-            self.label5.setFont(self.font)
-            c += 1
+            pointer += 1
 
             photo = QImage(camera, 950, 970, (950 * 3), QImage.Format_RGB888)
             self.label.setPixmap(QPixmap.fromImage(photo))
@@ -214,11 +209,38 @@ class Windows(QtWidgets.QWidget):
             self.label3.setPixmap(QPixmap.fromImage(photo3))
 
             cv2.waitKey(25)
+        # connection = mysql.connector.connect(host='localhost',
+        #                                      database='lets_dance',
+        #                                      user='root',
+        #                                      password='ab0930769971')
+        # my_cursor = connection.cursor(prepared=True)
+        # try:
+        #     insert_face = "INSERT INTO history(P_NO, SON_NO, POINT, TIME) VALUES (%s, %s, %s, %s)"
+        #     data_list = (2, 2, str(score), str(datetime.today()))
+        #     my_cursor.executemany(insert_face, (data_list,))
+        #     connection.commit()
+        # except Exception as err:
+        #     print(err)
+        #     connection.rollback()
 
         cap.release()
         cap2.release()
         cv2.destroyAllWindows()
 
+    # def savethescore(self):
+    #     connection = mysql.connector.connect(host='localhost',
+    #                                          database='lets_dance',
+    #                                          user='root',
+    #                                          password='ab0930769971')
+    #     my_cursor = connection.cursor(prepared=True)
+    #     try:
+    #         insert_face = "INSERT INTO history(P_NO, SON_NO, POINT, TIME) VALUES (%s, %s, %s, %s)"
+    #         data_list = (2, 2, str(self.score), str(datetime.today()))
+    #         my_cursor.executemany(insert_face, (data_list,))
+    #         connection.commit()
+    #     except Exception as err:
+    #         print(err)
+    #         connection.rollback()
     def run(self):
         self.thread_a = threading.Thread(target=self.opencv)
         self.thread_a.start()
@@ -226,6 +248,6 @@ class Windows(QtWidgets.QWidget):
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     win = Windows()
-
     win.showMaximized()
     sys.exit(app.exec_())
+
